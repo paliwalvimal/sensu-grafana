@@ -2,6 +2,7 @@
 Monitoring using Sensu Core and Grafana
 
 <strong>sensu-ubuntu-server-setup.sh</strong>: Script to setup ubuntu as Sensu server.
+
 <strong>sensu-centos-client-setup.sh</strong>: Script to setup CentOS as Sensu client.
 
 <strong>Documentation:</strong>
