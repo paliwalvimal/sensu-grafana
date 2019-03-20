@@ -113,6 +113,13 @@ cd wizardvan
 sudo cp -R lib/sensu/extensions/* /etc/sensu/extensions
 
 
+# Installing Mailer
+echo '================================='
+echo 'Installing Mailer'
+echo '================================='
+/opt/sensu/embedded/bin/sensu-install -p mailer
+
+
 # Creating Required Paths
 echo '================================='
 echo 'Creating Required Paths'
@@ -120,9 +127,9 @@ echo '================================='
 sudo mkdir -p /etc/sensu/conf.d/handlers/
 
 
-# Configuring Handlers
+# Configuring Relay Handler
 echo '================================='
-echo 'Configuring Handlers'
+echo 'Configuring Relay Handler'
 echo '================================='
 echo '{
     "relay": {
@@ -133,6 +140,37 @@ echo '{
         }
     }
 }' | sudo tee /etc/sensu/conf.d/handlers/relay.json
+
+
+# Configuring Mailer Handler
+echo '================================='
+echo 'Configuring Mailer Handler'
+echo '================================='
+echo '{
+    "handlers": {
+        "mailer": {
+            "type": "pipe",
+            "filter": "state-change-only",
+            "command": "/opt/sensu/embedded/bin/handler-mailer.rb"
+        }
+    }
+}' | sudo tee /etc/sensu/conf.d/handlers/mailer.json
+
+
+# Configuring Mailer
+echo '================================='
+echo 'Configuring Mailer'
+echo '================================='
+echo '{
+    "mailer": {
+        "admin_gui": "http://SENSU_SERVER_IP:3000",
+        "mail_from": "abc@xyz.com",
+        "mail_to": "abc@xyz.com",
+        "smtp_address": "localhost",
+        "smtp_port": "25",
+        "smtp_domain": "localhost"
+    }
+}' | sudo tee /etc/sensu/conf.d/mailer.json
 
 
 # Configuring Transport
@@ -187,115 +225,258 @@ echo '{
 }' | sudo tee /etc/sensu/conf.d/rabbitmq.json
 
 
-# Configuring CPU Checks
-echo '================================='
-echo 'Configuring CPU Checks'
-echo '================================='
-echo '{
-    "checks": {
-        "linux-cpu-usage": {
-            "type": "metric",
-            "command": "/opt/sensu/embedded/bin/metrics-cpu.rb",
-            "interval": 30,
-            "subscribers": [
-                "linux"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_cpu_usage_linux.json
+read -p "Configure checks for Linux(L), Windows(W), Both(B): " CHECK_CONF_INPUT
+declare -l CHECK_CONF_INPUT_LOWER=$CHECK_CONF_INPUT
 
-echo '{
-    "checks": {
-        "win-cpu-usage": {
-            "type": "metric",
-            "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-cpu-load.rb.bat",
-            "interval": 30,
-            "subscribers": [
-                "win"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_cpu_usage_win.json
+if [[ -z $CHECK_CONF_INPUT_LOWER ]]; then
+    echo "Skipping checks and metric configuration as no input was received."
+else
+    if [[ $CHECK_CONF_INPUT_LOWER == "l" || $CHECK_CONF_INPUT_LOWER == "b" ]]; then
+        echo '================================='
+        echo 'Configuring Linux Checks & Metrics'
+        echo '================================='
+        
+        # Configuring CPU Checks
+        echo '================================='
+        echo 'Configuring CPU Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-linux-cpu-usage": {
+                    "command": "/opt/sensu/embedded/bin/check-cpu.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_cpu_usage_linux.json
 
+        # Configuring Disk Checks
+        echo '================================='
+        echo 'Configuring Disk Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-linux-disk-usage": {
+                    "command": "/opt/sensu/embedded/bin/check-disk-usage.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_disk_usage_linux.json
 
-# Configuring Memory Usage
-echo '================================='
-echo 'Configuring Memory Checks'
-echo '================================='
-echo '{
-    "checks": {
-        "linux-memory-usage": {
-            "type": "metric",
-            "command": "/opt/sensu/embedded/bin/metrics-memory-percent.rb",
-            "interval": 30,
-            "subscribers": [
-                "linux"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_memory_usage_linux.json
+        # Configuring Memory Checks
+        echo '================================='
+        echo 'Configuring Memory Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-linux-memory-usage": {
+                    "command": "/opt/sensu/embedded/bin/check-memory-percent.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_memory_usage_linux.json
 
-echo '{
-    "checks": {
-        "win-memory-usage": {
-            "type": "metric",
-            "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-ram-usage.rb.bat",
-            "interval": 30,
-            "subscribers": [
-                "win"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_memory_usage_win.json
+        # Configuring CPU Metrics
+        echo '================================='
+        echo 'Configuring CPU Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-linux-cpu-usage": {
+                    "type": "metric",
+                    "command": "/opt/sensu/embedded/bin/metrics-cpu-pcnt-usage.rb",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_cpu_usage_linux.json
 
+        # Configuring Memory Metrics
+        echo '================================='
+        echo 'Configuring Memory Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-linux-memory-usage": {
+                    "type": "metric",
+                    "command": "/opt/sensu/embedded/bin/metrics-memory-percent.rb",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_memory_usage_linux.json
 
-# Configuring Disk Usage
-echo '================================='
-echo 'Configuring Disk Usage'
-echo '================================='
-echo '{
-    "checks": {
-        "linux-disk-usage": {
-            "type": "metric",
-            "command": "/opt/sensu/embedded/bin/metrics-disk-usage.rb",
-            "interval": 30,
-            "subscribers": [
-                "linux"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_disk_usage_linux.json
+        # Configuring Disk Usage Metrics
+        echo '================================='
+        echo 'Configuring Disk Usage Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-linux-disk-usage": {
+                    "type": "metric",
+                    "command": "/opt/sensu/embedded/bin/metrics-disk-usage.rb",
+                    "interval": 30,
+                    "subscribers": [
+                        "linux"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_disk_usage_linux.json
+    fi
 
-echo '{
-    "checks": {
-        "win-disk-usage": {
-            "type": "metric",
-            "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-disk-usage.rb.bat",
-            "interval": 30,
-            "subscribers": [
-                "win"
-            ],
-            "handlers": [
-                "relay"
-            ]
-        }
-    }
-}' | sudo tee /etc/sensu/conf.d/check_disk_usage_win.json
+    if [[ $CHECK_CONF_INPUT_LOWER == "w" || $CHECK_CONF_INPUT_LOWER == "b" ]]; then
+        echo '================================='
+        echo 'Configuring Windows Checks & Metrics'
+        echo '================================='
+        
+        # Configuring CPU Checks
+        echo '================================='
+        echo 'Configuring CPU Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-win-cpu-usage": {
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\ruby.exe c:\\opt\\sensu\\embedded\\bin\\check-windows-cpu-load.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_cpu_usage_win.json
+
+        # Configuring Disk Checks
+        echo '================================='
+        echo 'Configuring Disk Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-win-disk-usage": {
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\ruby.exe c:\\opt\\sensu\\embedded\\bin\\check-windows-disk.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_disk_usage_win.json
+
+        # Configuring Memory Checks
+        echo '================================='
+        echo 'Configuring Memory Checks'
+        echo '================================='
+        echo '{
+            "checks": {
+                "checks-win-memory-usage": {
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\ruby.exe c:\\opt\\sensu\\embedded\\bin\\check-windows-ram.rb -w 80 -c 90",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "mailer"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/checks_memory_usage_win.json
+
+        # Configuring CPU Metrics
+        echo '================================='
+        echo 'Configuring CPU Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-win-cpu-usage": {
+                    "type": "metric",
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-cpu-load.rb.bat",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_cpu_usage_win.json
+
+        # Configuring Memory Metrics
+        echo '================================='
+        echo 'Configuring Memory Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-win-memory-usage": {
+                    "type": "metric",
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-ram-usage.rb.bat",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_memory_usage_win.json
+
+        # Configuring Disk Metrics
+        echo '================================='
+        echo 'Configuring Disk Metrics'
+        echo '================================='
+        echo '{
+            "checks": {
+                "metrics-win-disk-usage": {
+                    "type": "metric",
+                    "command": "c:\\opt\\sensu\\embedded\\bin\\metric-windows-disk-usage.rb.bat",
+                    "interval": 30,
+                    "subscribers": [
+                        "win"
+                    ],
+                    "handlers": [
+                        "relay"
+                    ]
+                }
+            }
+        }' | sudo tee /etc/sensu/conf.d/metrics_disk_usage_win.json
+    fi
+fi
 
 
 # Starting services
