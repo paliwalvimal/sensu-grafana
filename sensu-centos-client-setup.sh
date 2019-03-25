@@ -5,7 +5,7 @@
 # Asking for Sensu Server Public IP
 read -p "Sensu Server IP: " SENSU_SERVER_IP
 echo '================================='
-echo 'PUBLIC IP: ' ${SENSU_SERVER_IP}
+echo 'SENSU SERVER IP: ' ${SENSU_SERVER_IP}
 echo '================================='
 
 
